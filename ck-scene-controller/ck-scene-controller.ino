@@ -104,6 +104,7 @@ void setup()
     delay (1000);
     Serial.begin (9600);
     Serial.printf ("\n\r\n\rHello, world!\n\r");
+    Serial.printlnf("System version: %s", System.version().c_str());
 
     for (i = 0; i < NUM_BUTTONS; i++) {
         pinMode (buttons[i], INPUT_PULLUP);
@@ -135,7 +136,13 @@ void tick_50Hz (void)
     timer3s++;
     if (timer3s >= 150) {
         timer3s = 0;
-        Serial.printf (".");
+        if (WiFi.ready ()) {
+            Serial.printf (".");
+        } else if (WiFi.connecting ()) {
+            Serial.printf ("C");
+        } else if (!WiFi.ready ()) {
+            Serial.printf ("X");
+        }
     }
 
     // check WiFi status and re-init udp routines if needed
@@ -143,42 +150,36 @@ void tick_50Hz (void)
         wiFiReady = true;
         Serial.printf ("Connected to WiFi.\n\r");
 #ifdef KINET
-        udp.begin (KINET_PORT);
+        // udp.begin (KINET_PORT);
 #endif
 #ifdef ARTNET
-        udp.begin (ARTNET_PORT);
+        // udp.begin (ARTNET_PORT);
 #endif
     } else if (wiFiReady && !WiFi.ready ()) {
         wiFiReady = false;
-        WiFi.disconnect ();
         Serial.printf ("Lost WiFi connection.\n\r");
-    } else if (timer3s == 0) {
-        if (WiFi.connecting ()) {
-            Serial.printf ("C");
-        } else if (WiFi.ready ()) {
-            Serial.printf ("R");
-        } else {
-            Serial.printf ("X");
-            WiFi.connect ();
-        }
     }
 
     if (wiFiReady) {
         // send levels
 #ifdef KINET
+        udp.begin (KINET_PORT);
         memset (udp_buffer, 0, KINET_PACKET_BYTES);
         memcpy (&udp_buffer[0], kinet_header, KINET_HEADER_BYTES);
         memcpy (&udp_buffer[KINET_HEADER_BYTES], levels, CHANNELS);
         udp.sendPacket (udp_buffer, KINET_PACKET_BYTES, pdsIpAddr, KINET_PORT);
         // Serial.printf ("KI: %02x %02x %02x\n\r", levels[24], levels[25], levels[26]);
+        udp.stop ();
 #endif
 
 #ifdef ARTNET
+        udp.begin (ARTNET_PORT);
         memset (udp_buffer, 0, ARTNET_PACKET_BYTES);
         memcpy (&udp_buffer[0], artnet_header, ARTNET_HEADER_BYTES);
         memcpy (&udp_buffer[ARTNET_HEADER_BYTES], levels, CHANNELS);
         udp.sendPacket (udp_buffer, ARTNET_PACKET_BYTES, pdsIpAddr, ARTNET_PORT);
         // Serial.printf ("AN: %02x %02x %02x\n\r", levels[24], levels[25], levels[26]);
+        udp.stop ();
 #endif
     }
 
